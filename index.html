@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaçak Kazı Bildirim ve Eğitim Portalı | FLL LEGOLOGLAR</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #0288d1;
+            --secondary: #0a3d62;
+            --earth: #8b4513;
+            --bg: #f0f8ff;
+            --white: #ffffff;
+            --accent: #1e90ff;
+            --light-blue: #e3f2fd;
+        }
+
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--secondary); }
+        .page { display: none; min-height: 100vh; width: 100%; }
+        .page.active { display: block; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        header { background: linear-gradient(135deg, var(--secondary), var(--primary)); color: white; padding: 30px 20px; text-align: center; }
+        .section { background: var(--white); border-radius: 20px; padding: 30px; margin: 20px auto; max-width: 850px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        
+        .stats-row { display: flex; gap: 15px; margin-bottom: 20px; }
+        .stat-card { flex: 1; background: var(--light-blue); padding: 15px; border-radius: 12px; text-align: center; }
+        #map { height: 300px; border-radius: 15px; border: 2px solid var(--light-blue); margin: 15px 0; z-index: 1; }
+        .trust-panel { border-left: 8px solid #ccc; padding: 10px; background: white; border-radius: 8px; }
+
+        input, textarea, select { width: 100%; padding: 12px; border-radius: 10px; border: 2px solid var(--light-blue); box-sizing: border-box; margin-bottom: 10px; }
+        .btn-main { background: var(--accent); color: white; border: none; padding: 15px; border-radius: 12px; width: 100%; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        
+        .quiz-bridge { margin-top: 30px; text-align: center; border-top: 2px dashed #ccc; padding-top: 20px; }
+        .btn-quiz-go { background: var(--earth); color: white; border: none; padding: 12px 25px; border-radius: 30px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; }
+        .options { list-style: none; padding: 0; }
+        .options li { background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 10px; cursor: pointer; border: 1px solid #eee; transition: 0.2s; }
+        .options li:hover { background: #f0f7ff; border-color: var(--earth); }
+        .progress-bar { height: 10px; background: #eee; border-radius: 5px; margin: 20px 0; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--earth); width: 0%; transition: 0.3s; }
+    </style>
+</head>
+<body>
+
+<div id="report-page" class="page active">
+    <header>
+        <h1>🏛️ Arkeolojik Miras Koruma Portalı</h1>
+        <p>İhbar Sistemi & 20 Soruluk Uzmanlık Testi</p>
+    </header>
+
+    <div class="section">
+        <div class="stats-row">
+            <div class="stat-card"><span id="countVal" style="font-size:20px; font-weight:bold;">0</span><br>Kayıtlı İhbar</div>
+            <div class="stat-card">
+                <div id="trustBorder" class="trust-panel">
+                    <span id="scoreDisplay" style="font-size:20px; font-weight:bold;">--</span><br>
+                    <span id="priorityText" style="font-size:11px;">Analiz Bekleniyor</span>
+                </div>
+            </div>
+        </div>
+
+        <label>İhbarcı Bilgisi</label>
+        <input type="text" id="rName" placeholder="Ad Soyad (Anonim için boş bırakın)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <input type="date" id="eventDate">
+            <input type="time" id="eventTime">
+        </div>
+        <textarea id="rDesc" rows="4" placeholder="Şüpheli faaliyeti detaylıca açıklayın (Kişi sayısı, araç plakası vb.)..."></textarea>
+        <select id="rLight">
+            <option value="day">Gündüz</option>
+            <option value="night">Gece (Kritik Risk)</option>
+        </select>
+
+        <div id="map"></div>
+        <button class="btn-main" onclick="submitReport()">İHBARI SİSTEME KAYDET VE JSON İNDİR</button>
+
+        <div class="quiz-bridge">
+            <h3>Arkeoloji Uzmanlık Testi</h3>
+            <p>20 Soruda mirası koruma bilginizi ölçün!</p>
+            <button class="btn-quiz-go" onclick="showPage('quiz-page')">
+                <i class="fas fa-graduation-cap"></i> 20 Soruluk Quize Başla
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="quiz-page" class="page">
+    <div class="section" style="border-top: 10px solid var(--earth);">
+        <button class="btn-quiz-go" style="background:none; color:var(--earth); margin-bottom:10px;" onclick="showPage('report-page')">← Testi Yarıda Bırak</button>
+        
+        <div class="progress-bar"><div id="progress" class="progress-fill"></div></div>
+        <p id="qCountDisplay">Soru: 1 / 20</p>
+
+        <div id="quiz-container">
+            </div>
+
+        <div id="quiz-result" style="display:none; text-align:center;">
+            <i class="fas fa-trophy" style="font-size: 60px; color: gold;"></i>
+            <h2 id="final-score-title"></h2>
+            <p id="final-msg"></p>
+            <button class="btn-main" style="background:var(--earth)" onclick="location.reload()">Başa Dön</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- NAVİGASYON ---
+    function showPage(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'report-page') {
+            setTimeout(() => { map.invalidateSize(); }, 200);
+        }
+        if(id === 'quiz-page') {
+            startQuiz();
+        }
+    }
+
+    // --- İHBAR SİSTEMİ ---
+    var map = L.map('map').setView([39.0, 35.0], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    var marker = null, selectedLoc = null, reportCount = 0;
+
+    map.on('click', function(e) {
+        selectedLoc = e.latlng;
+        if(marker) map.removeLayer(marker);
+        marker = L.marker(selectedLoc).addTo(map);
+    });
+
+    function submitReport() {
+        const desc = document.getElementById('rDesc').value;
+        const light = document.getElementById('rLight').value;
+        if(!selectedLoc || desc.length < 5) { alert("Lütfen haritadan konum seçin ve açıklama yazın!"); return; }
+
+        let score = Math.min(desc.length / 2, 60) + (light === "night" ? 40 : 20);
+        score = Math.floor(Math.min(score, 100));
+        let priority = Math.ceil(score / 20);
+
+        document.getElementById('scoreDisplay').innerText = score;
+        document.getElementById('priorityText').innerText = "Öncelik: " + priority;
+        document.getElementById('trustBorder').style.borderLeftColor = score > 75 ? "red" : "orange";
+        
+        reportCount++;
+        document.getElementById('countVal').innerText = reportCount;
+
+        const data = {
+            id: reportCount,
+            detay: desc,
+            guven: score,
+            oncelik: priority,
+            koordinat: selectedLoc,
+            tarih: new Date().toLocaleString()
+        };
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type : 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `ihbar_analiz_${reportCount}.json`;
+        a.click();
+    }
+
+    // --- DINAMIK QUIZ (JSON'DAN OKUMA) ---
+    let quizBank = [];
+    let selectedQuestions = [];
+    let currentQIdx = 0;
+    let score = 0;
+
+    async function startQuiz() {
+        try {
+            const response = await fetch('sorular.json');
+            if (!response.ok) throw new Error('JSON dosyası bulunamadı!');
+            const data = await response.json();
+            
+            // Tüm soruları karıştır ve 20 tanesini seç
+            quizBank = data.sort(() => 0.5 - Math.random());
+            selectedQuestions = quizBank.slice(0, 20);
+
+            currentQIdx = 0;
+            score = 0;
+            
+            document.getElementById('quiz-container').style.display = 'block';
+            document.getElementById('quiz-result').style.display = 'none';
+            
+            loadQuestion();
+        } catch (error) {
+            console.error(error);
+            document.getElementById('quiz-container').innerHTML = "<h3>Hata: sorular.json dosyası yüklenemedi. Dosyanın HTML ile aynı klasörde olduğundan emin olun.</h3>";
+        }
+    }
+
+    function loadQuestion() {
+        const container = document.getElementById('quiz-container');
+        const qData = selectedQuestions[currentQIdx];
+        
+        container.innerHTML = `
+            <div class="question-block active">
+                <h3>${currentQIdx + 1}. ${qData[0]}</h3>
+                <ul class="options">
+                    <li onclick="handleAnswer(0)">A) ${qData[1]}</li>
+                    <li onclick="handleAnswer(1)">B) ${qData[2]}</li>
+                    <li onclick="handleAnswer(2)">C) ${qData[3]}</li>
+                </ul>
+            </div>
+        `;
+        
+        document.getElementById('qCountDisplay').innerText = `Soru: ${currentQIdx + 1} / ${selectedQuestions.length}`;
+        document.getElementById('progress').style.width = (currentQIdx / selectedQuestions.length * 100) + "%";
+    }
+
+    function handleAnswer(selectedIdx) {
+        const correctIdx = selectedQuestions[currentQIdx][4];
+        if(selectedIdx === correctIdx) {
+            score++;
+        }
+        
+        currentQIdx++;
+        
+        if(currentQIdx < selectedQuestions.length) {
+            loadQuestion();
+        } else {
+            showResult();
+        }
+    }
+
+    function showResult() {
+        document.getElementById('quiz-container').style.display = 'none';
+        document.getElementById('quiz-result').style.display = 'block';
+        document.getElementById('progress').style.width = "100%";
+        document.getElementById('final-score-title').innerText = `Skorunuz: ${score} / ${selectedQuestions.length}`;
+        
+        let msg = score >= 15 ? "Mükemmel! Bir Miras Koruyucusu Uzmanısınız." : "Güzel deneme! Daha fazla bilgi için araştırmaya devam edin.";
+        document.getElementById('final-msg').innerText = msg;
+    }
+</script>
+</body>
+</html>
